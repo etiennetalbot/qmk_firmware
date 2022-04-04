@@ -17,10 +17,8 @@
 #include QMK_KEYBOARD_H
 #include "planck.h"
 #include "action_layer.h"
-#include "muse.h"
 #include "process_unicode.h"
 #include "keymap_extras/keymap_canadian_multilingual.h"
-// #include "rgblight.h"
 
 extern keymap_config_t keymap_config;
 
@@ -34,7 +32,6 @@ enum planck_layers {
 
 enum planck_keycodes {
   QWERTY = SAFE_RANGE,
-  BACKLIT,
   MY_APPOS,
   EXT_PLV,
   MY_ACIRC,
@@ -51,11 +48,16 @@ enum planck_keycodes {
 #define LOWER MO(_LOWER)
 #define RAISE MO(_RAISE)
 #define MTSHFTA MT(MOD_LSFT, KC_A)
+#define MTSHFTSC MT(MOD_LSFT, KC_SCLN)
 #define MTSHFTSP MT(MOD_LSFT, KC_SPC)
 #define MTCTRLS MT(MOD_LCTL, KC_S)
+#define MTCTRLL MT(MOD_LCTL, KC_L)
 #define MTCTRLZ MT(MOD_LCTL, KC_Z)
 #define MTALTD MT(MOD_LALT, KC_D)
+#define MTALTK MT(MOD_LALT, KC_K)
+#define MTALTX MT(MOD_LALT, KC_X)
 #define MTCMDF MT(MOD_LGUI, KC_F)
+#define MTCMDJ MT(MOD_LGUI, KC_J)
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
@@ -71,10 +73,10 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  * `-----------------------------------------------------------------------------------'
  */
 [_QWERTY] = LAYOUT_planck_grid(
-    KC_TAB,  KC_Q,    KC_W,    KC_E,    KC_R,   KC_T,     KC_Y,     KC_U,  KC_I,    KC_O,    KC_P,           KC_BSPC,
-    KC_ESC,  MTSHFTA, MTCTRLS, MTALTD,  MTCMDF, KC_G,     KC_H,     KC_J,  KC_K,    KC_L,    KC_SCLN,        MY_APPOS,
-    KC_LSFT, MTCTRLZ, KC_X,    KC_C,    KC_V,   KC_B,     KC_N,     KC_M,  KC_COMM, KC_DOT,  ALGR(KC_SLASH), KC_ENT,
-    _______, _______, _______, KC_LGUI, LOWER,  MTSHFTSP, MTSHFTSP, RAISE, ARROW,   _______, _______,        _______
+    KC_TAB,  KC_Q,    KC_W,    KC_E,    KC_R,   KC_T,     KC_Y,     KC_U,   KC_I,    KC_O,    KC_P,           KC_BSPC,
+    KC_ESC,  MTSHFTA, MTCTRLS, MTALTD,  MTCMDF, KC_G,     KC_H,     MTCMDJ, MTALTK,  MTCTRLL, MTSHFTSC,       MY_APPOS,
+    KC_LSFT, MTCTRLZ, MTALTX,  KC_C,    KC_V,   KC_B,     KC_N,     KC_M,   KC_COMM, KC_DOT,  ALGR(KC_SLASH), KC_ENT,
+    _______, _______, _______, KC_LGUI, LOWER,  MTSHFTSP, MTSHFTSP, RAISE,  ARROW,   _______, _______,        _______
 ),
 
 /* Arrow
@@ -151,11 +153,6 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 };
 
-#ifdef AUDIO_ENABLE
-  float plover_song[][2]     = SONG(PLOVER_SOUND);
-  float plover_gb_song[][2]  = SONG(PLOVER_GOODBYE_SOUND);
-#endif
-
 uint32_t layer_state_set_user(uint32_t state) {
   return update_tri_layer_state(state, _LOWER, _RAISE, _ADJUST);
 }
@@ -164,15 +161,6 @@ void matrix_init_user(void) {
   #if (defined(UNICODE_ENABLE) || defined(UNICODEMAP_ENABLE) || defined(UCIS_ENABLE))
     set_unicode_input_mode(UC_OSX);
   #endif
-  // #ifdef RGBLIGHT_ENABLE
-    // rgblight_enable();
-    // rgblight_mode(1);
-    // WS2812_init();
-    // WS2812_set_color_all(255, 255, 255);
-    // rgblight_setrgb(255, 255, 255);
-    // rgblight_show_solid_color(255, 255, 255);
-    // rgblight_setrgb(0xFF, 0xFF, 0xFF);
-  // #endif
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
@@ -193,32 +181,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
       if (record->event.pressed) {
         layer_on(_LOWER);
         update_tri_layer(_LOWER, _RAISE, _ADJUST);
-        // WS2812_set_color_all(255, 0, 255);
-        // rgblight_setrgb(255, 255, 255);
-        /* #ifdef RGBLIGHT_ENABLE
-          rgblight_mode(1);
-          rgblight_setrgb(255, 255, 255);
-        #endif */
       } else {
         layer_off(_LOWER);
         update_tri_layer(_LOWER, _RAISE, _ADJUST);
-      }
-      return false;
-      break;
-    case BACKLIT:
-      if (record->event.pressed) {
-        register_code(KC_RSFT);
-        #ifdef BACKLIGHT_ENABLE
-          backlight_step();
-        #endif
-        #ifdef KEYBOARD_planck_rev5
-          PORTE &= ~(1<<6);
-        #endif
-      } else {
-        unregister_code(KC_RSFT);
-        #ifdef KEYBOARD_planck_rev5
-          PORTE |= (1<<6);
-        #endif
       }
       return false;
       break;
@@ -288,89 +253,4 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
       break;
   }
   return true;
-}
-
-bool muse_mode = false;
-uint8_t last_muse_note = 0;
-uint16_t muse_counter = 0;
-uint8_t muse_offset = 70;
-uint16_t muse_tempo = 50;
-
-void encoder_update(bool clockwise) {
-  if (muse_mode) {
-    if (IS_LAYER_ON(_RAISE)) {
-      if (clockwise) {
-        muse_offset++;
-      } else {
-        muse_offset--;
-      }
-    } else {
-      if (clockwise) {
-        muse_tempo+=1;
-      } else {
-        muse_tempo-=1;
-      }
-    }
-  } else {
-    if (clockwise) {
-      register_code(KC_MS_WH_DOWN);
-      unregister_code(KC_MS_WH_DOWN);
-    } else {
-      register_code(KC_MS_WH_UP);
-      unregister_code(KC_MS_WH_UP);
-    }
-  }
-}
-
-void dip_update(uint8_t index, bool active) {
-  switch (index) {
-    case 0:
-      if (active) {
-        #ifdef AUDIO_ENABLE
-          PLAY_SONG(plover_song);
-        #endif
-        layer_on(_ADJUST);
-      } else {
-        #ifdef AUDIO_ENABLE
-          PLAY_SONG(plover_gb_song);
-        #endif
-        layer_off(_ADJUST);
-      }
-      break;
-    case 1:
-      if (active) {
-        muse_mode = true;
-      } else {
-        muse_mode = false;
-        #ifdef AUDIO_ENABLE
-          stop_all_notes();
-        #endif
-      }
-   }
-}
-
-void matrix_scan_user(void) {
-  #ifdef AUDIO_ENABLE
-    if (muse_mode) {
-      if (muse_counter == 0) {
-        uint8_t muse_note = muse_offset + SCALE[muse_clock_pulse()];
-        if (muse_note != last_muse_note) {
-          stop_note(compute_freq_for_midi_note(last_muse_note));
-          play_note(compute_freq_for_midi_note(muse_note), 0xF);
-          last_muse_note = muse_note;
-        }
-      }
-      muse_counter = (muse_counter + 1) % muse_tempo;
-    }
-  #endif
-}
-
-bool music_mask_user(uint16_t keycode) {
-  switch (keycode) {
-    case RAISE:
-    case LOWER:
-      return false;
-    default:
-      return true;
-  }
 }
